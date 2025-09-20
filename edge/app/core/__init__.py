@@ -1,0 +1,1 @@
+# AIDA-CRM Edge API Core
