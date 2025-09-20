@@ -1,0 +1,35 @@
+name: "Epic 02: Capture & Connect Implementation"
+description: "Implement lead capture and communication workflows"
+priority: high
+estimated_points: 21
+
+stories:
+  - id: AIDA-007
+    title: "Multi-Channel Lead Capture"
+    description: "Expand lead capture to multiple sources"
+    acceptance_criteria:
+      - Web form integration
+      - API webhook endpoints
+      - Social media connectors
+      - Source attribution tracking
+    points: 8
+
+  - id: AIDA-008
+    title: "Lead Qualification Engine"
+    description: "Implement AI-powered lead scoring"
+    acceptance_criteria:
+      - Scoring algorithm with configurable weights
+      - Integration with Chroma for semantic analysis
+      - Qualification workflow automation
+      - Autonomy levels L1-L3 supported
+    points: 8
+
+  - id: AIDA-009
+    title: "Communication System"
+    description: "Email and SMS communication workflows"
+    acceptance_criteria:
+      - Email template system
+      - SMS integration
+      - Personalization engine
+      - Engagement tracking
+    points: 5

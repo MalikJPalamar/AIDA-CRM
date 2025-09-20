@@ -1,0 +1,65 @@
+name: "Epic 01: Foundation & Core Services"
+description: "Establish core infrastructure and basic CRM operations"
+priority: critical
+estimated_points: 34
+
+stories:
+  - id: AIDA-001
+    title: "Edge API Gateway Setup"
+    description: "Create FastAPI edge service with authentication"
+    acceptance_criteria:
+      - Edge service runs on Fly.io
+      - JWT authentication implemented
+      - Rate limiting configured
+      - Health check endpoint available
+    points: 5
+
+  - id: AIDA-002
+    title: "Core Docker Swarm Setup"
+    description: "Configure Docker Swarm with all core services"
+    acceptance_criteria:
+      - Docker Swarm initialized on VPS
+      - All services defined in docker-compose.yml
+      - Service discovery working
+      - Health checks configured
+    points: 8
+
+  - id: AIDA-003
+    title: "NATS JetStream Configuration"
+    description: "Set up event streaming with NATS"
+    acceptance_criteria:
+      - NATS JetStream running
+      - CRM streams created (leads, deals, comms, analytics)
+      - Event subjects defined
+      - Basic publish/subscribe working
+    points: 5
+
+  - id: AIDA-004
+    title: "Database Layer Setup"
+    description: "Configure Supabase, DuckDB, and Chroma"
+    acceptance_criteria:
+      - Supabase connection established
+      - DuckDB analytics tables created
+      - Chroma vector database running
+      - Data models defined
+    points: 8
+
+  - id: AIDA-005
+    title: "Lead Capture API"
+    description: "Implement basic lead capture endpoint"
+    acceptance_criteria:
+      - POST /api/v1/leads/capture endpoint
+      - Lead validation with Pydantic
+      - Event emission to NATS
+      - Data persistence to Supabase
+    points: 5
+
+  - id: AIDA-006
+    title: "Basic UI Dashboard"
+    description: "Create Next.js dashboard with shadcn/ui"
+    acceptance_criteria:
+      - Next.js app with TypeScript
+      - shadcn/ui components integrated
+      - Basic lead list view
+      - Authentication flow
+    points: 3
