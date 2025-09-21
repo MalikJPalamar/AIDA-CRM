@@ -12,7 +12,7 @@ import structlog
 from .core.config import settings
 from .core.database import init_db, close_db
 from .services.nats_client import initialize_nats, close_nats
-from .api import health, leads, webhooks, communications
+from .api import health, leads, webhooks, communications, deals, customer_success
 
 # Configure structured logging
 structlog.configure(
@@ -153,6 +153,8 @@ app.include_router(health.router)
 app.include_router(leads.router, prefix=settings.api_v1_prefix)
 app.include_router(webhooks.router, prefix=settings.api_v1_prefix)
 app.include_router(communications.router, prefix=settings.api_v1_prefix)
+app.include_router(deals.router, prefix=settings.api_v1_prefix)
+app.include_router(customer_success.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")
