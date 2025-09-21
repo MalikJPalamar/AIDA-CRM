@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # NATS JetStream Message Bus
   nats:
@@ -8,13 +6,11 @@ services:
     ports:
       - "4222:4222"  # Client connections
       - "8222:8222"  # HTTP monitoring
-      - "6222:6222"  # Routing
     command:
       - "--jetstream"
       - "--store_dir=/data"
       - "--http_port=8222"
       - "--port=4222"
-      - "--cluster_name=aida-cluster"
     volumes:
       - nats-data:/data
     networks:
@@ -26,47 +22,27 @@ services:
       timeout: 5s
       retries: 5
 
-  # Supabase Local (PostgreSQL)
-  supabase-db:
-    image: supabase/postgres:15.1.0.117
-    container_name: aida-supabase-db
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: aida-postgres
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: aida_crm
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your-super-secret-and-long-postgres-password}
+      POSTGRES_DB: ${POSTGRES_DB:-aida_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_PORT: 5432
     volumes:
-      - supabase-data:/var/lib/postgresql/data
-      - ./core/config/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres-data:/var/lib/postgresql/data
     networks:
       - aida-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
-
-  # DuckDB Analytics Service
-  duckdb:
-    image: python:3.11-slim
-    container_name: aida-duckdb
-    working_dir: /app
-    command: >
-      sh -c "
-        pip install duckdb fastapi uvicorn &&
-        python -c 'import duckdb; conn = duckdb.connect(\"/data/analytics.duckdb\"); conn.execute(\"CREATE TABLE IF NOT EXISTS leads (id VARCHAR, email VARCHAR, created_at TIMESTAMP)\"); conn.close()' &&
-        python -m http.server 8003
-      "
-    volumes:
-      - duckdb-data:/data
-    ports:
-      - "8003:8003"
-    networks:
-      - aida-net
-    restart: unless-stopped
 
   # ChromaDB Vector Database
   chroma:
@@ -76,7 +52,7 @@ services:
       - "8001:8000"
     environment:
       CHROMA_SERVER_AUTH_PROVIDER: token
-      CHROMA_SERVER_AUTH_TOKEN: ${CHROMA_AUTH_TOKEN:-aida-dev-token}
+      CHROMA_SERVER_AUTH_TOKEN: ${CHROMA_AUTH_TOKEN}
     volumes:
       - chroma-data:/chroma/chroma
     networks:
@@ -89,45 +65,39 @@ services:
       retries: 5
 
   # AIDA Core API
-  aida-core:
+  core:
     build:
       context: ./core
       dockerfile: Dockerfile
     container_name: aida-core
     ports:
-      - "8001:8000"
+      - "8000:8000"
     environment:
       # Database
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-your-super-secret-and-long-postgres-password}@supabase-db:5432/aida_crm
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aida_crm}
 
       # NATS
       NATS_URL: nats://nats:4222
 
       # Vector DB
       CHROMA_URL: http://chroma:8000
-      CHROMA_AUTH_TOKEN: ${CHROMA_AUTH_TOKEN:-aida-dev-token}
+      CHROMA_AUTH_TOKEN: ${CHROMA_AUTH_TOKEN}
 
-      # DuckDB
-      DUCKDB_PATH: /data/analytics.duckdb
-
-      # LLM
+      # AI Service
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      OPENROUTER_BASE_URL: https://openrouter.ai/api/v1
-      OPENROUTER_MODEL: moonshotai/kimi-k2
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL}
 
       # App Config
-      ENVIRONMENT: development
-      DEBUG: true
-      LOG_LEVEL: INFO
-      SECRET_KEY: ${SECRET_KEY:-your-super-secret-key-change-in-production}
-    volumes:
-      - ./core:/app
-      - duckdb-data:/data
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SECRET_KEY: ${SECRET_KEY}
     networks:
       - aida-net
     depends_on:
       - nats
-      - supabase-db
+      - postgres
       - chroma
     restart: unless-stopped
     healthcheck:
@@ -136,73 +106,56 @@ services:
       timeout: 10s
       retries: 3
 
-  # AIDA Edge API (for Fly.io deployment)
-  aida-edge:
+  # AIDA Edge API Gateway
+  edge:
     build:
       context: ./edge
       dockerfile: Dockerfile
     container_name: aida-edge
     ports:
-      - "8000:8000"
+      - "8080:8000"
     environment:
       # Core API
-      CORE_API_URL: http://aida-core:8000
+      CORE_API_URL: http://core:8000
 
       # NATS
       NATS_URL: nats://nats:4222
 
       # Security
-      SECRET_KEY: ${SECRET_KEY:-your-super-secret-key-change-in-production}
+      SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET: ${JWT_SECRET}
 
       # App Config
-      ENVIRONMENT: development
-      DEBUG: true
-    volumes:
-      - ./edge:/app
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - aida-net
     depends_on:
-      - aida-core
+      - core
       - nats
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Prometheus Monitoring
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: aida-prometheus
+  # UI Dashboard
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    container_name: aida-ui
     ports:
-      - "9090:9090"
-    volumes:
-      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--web.enable-lifecycle'
-      - '--web.enable-admin-api'
-    networks:
-      - aida-net
-    restart: unless-stopped
-
-  # Grafana Dashboards
-  grafana:
-    image: grafana/grafana:latest
-    container_name: aida-grafana
-    ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: false
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_ENVIRONMENT: ${ENVIRONMENT:-production}
     networks:
       - aida-net
     depends_on:
-      - prometheus
+      - edge
     restart: unless-stopped
 
 networks:
@@ -213,13 +166,7 @@ networks:
 volumes:
   nats-data:
     driver: local
-  supabase-data:
-    driver: local
-  duckdb-data:
+  postgres-data:
     driver: local
   chroma-data:
-    driver: local
-  prometheus-data:
-    driver: local
-  grafana-data:
     driver: local
